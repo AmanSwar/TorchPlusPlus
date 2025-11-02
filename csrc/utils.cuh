@@ -7,6 +7,9 @@
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
 
+
+namespace torchpp{
+
 //constants
 #define WARP_SIZE 32
 
@@ -117,4 +120,6 @@ __device__ __forceinline__ half warpReduceSumF16AccF32(half value){
     value32 += __shfl_xor_sync(MASK , value32 , offset);
   }
   return __float2half(value32);
+}
+
 }
