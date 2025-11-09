@@ -7,82 +7,50 @@
 - SwiGLU
 */
 
-#include <__clang_cuda_builtin_vars.h>
-#include <__clang_cuda_runtime_wrapper.h>
 #include <cmath>
-#include <cstdint>
 #include <cuda_runtime.h>
-#include <utility>
+#include <cute/arch/mma_sm100_desc.hpp>
+#include <cutlass/cutlass.h>
+#include <cutlass/detail/helper_macros.hpp>
+#include <cutlass/half.h>
 
+#include "../dtypes_util.cuh"
 #include "../math_util.h"
 
+// Currently only supporting fp16 as majorly all inference is in fp16
 
-namespace torchpp{
+namespace torchpp {
 
-template <typename Dtype> 
-__device__ __forceinline__ Dtype silu(const Dtype &input){
-  return (Dtype)((float)(input) / (1.0f + expf((float)-input)));
-} 
+struct GeluHalf {
+  CUTLASS_HOST_DEVICE
+  cutlass::half_t operator()(cutlass::half_t const &scaler) const {
+    // convert scaler (half) -> float
+    float x = float(scaler);
+    float const kAlpha = T_SQRT_2_PI; // sqrt(2 / pi)
+    float const kBeta = 0.044715;
 
-template <typename Dtype>
-__device__ __forceinline__ Dtype gelu(const Dtype &input){
-  const float f = (float)input;
-  constexpr float ALPHA = T_I_SQRT_2;
-  return (Dtype)(f * 0.5f * (1.0f + erf(f * ALPHA)));
-}
+    float xCubed = x * x * x;
+    float tanhArgs = kAlpha * (x + kBeta * xCubed);
 
-template <typename Dtype>
-__device__ __forceinline__ Dtype geluTanh(const Dtype &input){
+    float tanhVal = tanhf(tanhArgs);
 
-  const float f = (float)input;
-  constexpr float BETA = T_I_SQRT_2 * T_2_I_SQRT_PI * 0.5f;
-  constexpr float KAPPA = 0.044715;
-   
-  float inputCube = input * input * input;
+    float result = 0.5f * x * (1.0f + tanhVal);
 
-  float innerTerm = BETA * (f + KAPPA * inputCube);
-
-  return (Dtype)(0.5f * f * (1.0f + tanhf(innerTerm)));
-}
-
-
-
-template<
-  typename Dtype,
-  Dtype (*ACT_FN)(const Dtype&),
-  bool actFirst
->
-__device__ __forceinline__ Dtype compute(
-  const Dtype& x,
-  const Dtype& y
-){
-  //conditional -> if activcation first then actfn(x) * y 
-  // else -> x * actfn(y)
-  return actFirst ? ACT_FN(x) * y : x * ACT_FN(y); 
-}
-
-
-
-template<
-  typename Dtype,
-  Dtype (*ACT_FN)(const Dtype&),
-  bool actFirst
->
-__global__ void actMulKernel(
-  const Dtype* __restrict__ input,
-  Dtype* __restrict__ output,
-  const int D
-){
-
-  const int64_t tokenIdx = blockIdx.x;
-
-  for(int64_t idx = threadIdx.x; idx < D ; idx += blockDim.x){
-    const Dtype x = __ldg(&input[tokenIdx * 2 * D + idx]);
-    const Dtype y = __ldg(&input[tokenIdx * 2 * D + D + idx]);
-
-    output[tokenIdx * D + idx] = compute<Dtype , ACT_FN , actFirst>(x,y);
+    return cutlass::half_t(result);
   }
-}
+};
 
+struct SiluHalf {
 
-}
+  CUTLASS_HOST_DEVICE // __forceinline__ __device__ __host__
+      CUTLASSFP16
+      operator()(CUTLASSFP16 const &input) const {
+
+    float inputFloat = (float)(input);
+    float denom = 1.0f + expf(-inputFloat);
+    float result = inputFloat / denom;
+    return (CUTLASSFP16)result;
+  }
+};
+
+} // namespace torchpp
