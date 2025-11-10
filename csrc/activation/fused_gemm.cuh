@@ -25,31 +25,31 @@ template <
 >
 class LinearGeluFP16{
 public:
-  using ElemOutput = ElemOutputDtype;
-  using ElemAcc = ElemAccDtype;
-  using ElemCompute = ElemComputeDtype;
+  using ElementOutput = ElemOutputDtype;
+  using ElementAccumulator  = ElemAccDtype;
+  using ElementCompute = ElemComputeDtype;
 
   static int const kCount = Count;
 
-  using FragmentOutput = cutlass::Array<ElemOutput , kCount>;
-  using FragmentAcc = cutlass::Array<ElemAcc , kCount>;
-  using ComputeFragment = cutlass::Array<ElemCompute , kCount>;
+  using FragmentOutput = cutlass::Array<ElementOutput , kCount>;
+  using FragmentAcc = cutlass::Array<ElementAccumulator , kCount>;
+  using ComputeFragment = cutlass::Array<ElementCompute , kCount>;
 
   struct Params {
-    ElemCompute alpha;
-    ElemCompute beta;
+    ElementCompute alpha;
+    ElementCompute beta;
     
     // constructor
     CUTLASS_HOST_DEVICE
-    Params() : alpha(ElemCompute(1)), beta(ElemCompute(0)) {}
+    Params() : alpha(ElementCompute(1)), beta(ElementCompute(0)) {}
 
     CUTLASS_HOST_DEVICE
-    Params(ElemCompute alpha , ElemCompute beta) : alpha(alpha) , beta(beta) {}
+    Params(ElementCompute alpha , ElementCompute beta) : alpha(alpha) , beta(beta) {}
   };
 
 private:
-  ElemCompute alpha_;
-  ElemCompute beta_;
+  ElementCompute alpha_;
+  ElementCompute beta_;
 
 public:
   CUTLASS_HOST_DEVICE
@@ -57,6 +57,14 @@ public:
     alpha_ = params.alpha;
     beta_ = params.beta;
   }
+
+  CUTLASS_HOST_DEVICE
+  bool is_source_needed() const{
+    return beta_ != ElementCompute(0);
+  }
+  CUTLASS_HOST_DEVICE
+  void set_k_partition(int k_partition, int k_partition_count) {}
+  
 
   CUTLASS_HOST_DEVICE
   FragmentOutput operator()(
@@ -67,8 +75,8 @@ public:
     ComputeFragment convertedAcc;
     ComputeFragment convertedSrc;
 
-    cutlass::NumericArrayConverter<ElemCompute , ElemAcc , kCount> accConverter;
-    cutlass::NumericArrayConverter<ElemCompute, ElemOutput, kCount> srcConverter;
+    cutlass::NumericArrayConverter<ElementCompute , ElementAccumulator , kCount> accConverter;
+    cutlass::NumericArrayConverter<ElementCompute, ElementOutput, kCount> srcConverter;
 
     ComputeFragment intermediate;
 
@@ -80,7 +88,7 @@ public:
     
     //convert half for GeLU
     cutlass::Array<cutlass::half_t , kCount> halfIntermediate;
-    cutlass::NumericArrayConverter<CUTLASSFP16, ElemCompute, kCount> toHalf;
+    cutlass::NumericArrayConverter<CUTLASSFP16, ElementCompute, kCount> toHalf;
     halfIntermediate = toHalf(intermediate);
     
     GeluHalf gelu;
@@ -95,20 +103,27 @@ public:
 
     
     //convert back to output type
-    cutlass::NumericArrayConverter<ElemOutput, cutlass::half_t, kCount> outputConverter;
+    cutlass::NumericArrayConverter<ElementOutput, cutlass::half_t, kCount> outputConverter;
     return outputConverter(halfResult);
+  }
 
-  
+  CUTLASS_HOST_DEVICE
+  FragmentOutput operator()(
+    FragmentAcc const &accumulator
+  ) const {
+    FragmentOutput source;
+    source.clear();
+    return (*this)(accumulator, source);
   }
 
 };
 
-
+namespace fused_linear{
 using ElementA = CUTLASSFP16;
 using ElementB = CUTLASSFP16;
 using ElementC = CUTLASSFP16;
 using ElementAcc = FP32;
-using ElementCompute = CUTLASSFP16;
+using ElementCompute = FP32;
 
 
 using LayoutA = cutlass::layout::RowMajor;
@@ -142,5 +157,5 @@ using Gemm = cutlass::gemm::device::Gemm<
   kAlignB
 >;
 
-
+}
 }
