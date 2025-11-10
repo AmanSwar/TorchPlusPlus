@@ -1,5 +1,6 @@
 #pragma once
 
+#include <__clang_cuda_runtime_wrapper.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -120,6 +121,33 @@ __device__ __forceinline__ half warpReduceSumF16AccF32(half value){
     value32 += __shfl_xor_sync(MASK , value32 , offset);
   }
   return __float2half(value32);
+}
+
+
+template <typename Dtype , int M , const int N =2>
+__device__ __forceinline__ void fill2DRegs(Dtype (&R)[M][N] , Dtype val){
+  #pragma unroll
+  for(int i = 0 ; i < M ; i++){
+    #pragma unroll
+    for(int j = 0 ; j < N ; j++){
+      R[i][j] = val;
+    }
+  }
+}
+
+
+template <typename Dtype , int M , int N , const int K = 2>
+__device__ __forceinline__ void fill3DRegs(Dtype (&R)[M][N][K] , Dtype val){
+  #pragma unroll
+  for(int i= 0 ; i < M ; i++){
+    #pragma unroll
+    for(int j = 0 ; j < N ; j++){
+      #pragma unroll
+      for(int k = 0 ; k < K ; k++){
+        R[i][j][k] = val;
+      }
+    }
+  }
 }
 
 }
