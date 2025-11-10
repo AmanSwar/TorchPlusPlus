@@ -57,5 +57,5 @@ torch::Tensor LinearGeluFused(
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("forward", &LinearGeluFused, "CUTLASS Linear + GELU forward (FP16)");
+  m.def("LinearGelu", &LinearGeluFused, "CUTLASS Linear + GELU forward (FP16)");
 }
