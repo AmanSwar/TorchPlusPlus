@@ -1,5 +1,6 @@
 #pragma once
 
+#include "torch/csrc/jit/ir/ir.h"
 #include <__clang_cuda_runtime_wrapper.h>
 #include <cstdint>
 #include <cstdio>
@@ -131,6 +132,16 @@ __device__ __forceinline__ half warpReduceSumF16AccF32(half value){
   return __float2half(value32);
 }
 
+template <typename T, const int kWarpSize = WARP_SIZE>
+__device__ __forceinline__ T warpReduceMax(T val) {
+#pragma unroll
+  for (int mask = kWarpSize >> 1; mask >= 1; mask >>= 1) {
+    val = max(val, __shfl_xor_sync(0xffffffff, val, mask, kWarpSize));
+  }
+  return val;
+}
+
+
 
 template <typename Dtype , int M , const int N =2>
 __device__ __forceinline__ void fill2DRegs(Dtype (&R)[M][N] , Dtype val){
@@ -157,5 +168,15 @@ __device__ __forceinline__ void fill3DRegs(Dtype (&R)[M][N][K] , Dtype val){
     }
   }
 }
+
+template <typename Dtype , int M>
+__device__ __forceinline__ void fill1DRegs(Dtype (&S)[M] , Dtype val){
+  #pragma unroll
+  for(int i = 0 ; i < M ; i++){
+    S[i] = val;
+  }
+}
+
+
 
 }
