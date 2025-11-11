@@ -21,7 +21,9 @@
 
 namespace torchpp {
 
-struct GeluHalf {
+namespace activation{
+
+  struct GeluHalf {
   CUTLASS_HOST_DEVICE
   cutlass::half_t operator()(cutlass::half_t const &scaler) const {
     // convert scaler (half) -> float
@@ -52,5 +54,8 @@ struct SiluHalf {
     return (CUTLASSFP16)result;
   }
 };
+
+
+} // namespace activation
 
 } // namespace torchpp
