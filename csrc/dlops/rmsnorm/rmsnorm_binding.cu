@@ -1,9 +1,8 @@
 #include "ATen/core/TensorBody.h"
 #include "c10/core/ScalarType.h"
-#include "c10/util/BFloat16.h"
 
 #include "c10/util/Half.h"
-#include "rmsnorm.cuh"
+#include "rmsnorm_fp16.cuh"
 
 #include <cassert>
 #include <torch/extension.h>
@@ -70,5 +69,5 @@ torch::Tensor fused_rmsnorm(torch::Tensor input_matrix, torch::Tensor weight,
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   // m.def("rmsnorm_kernel_vec", &fused_rmsnorm, "Fused RMSNorm (BF16)");
-  m.def("rmsnorm_kernel_vectorized", &fused_rmsnorm, "Fused RMSNorm (BF16)");
+  m.def("rmsnormFused", &fused_rmsnorm, "Fused RMSNorm (BF16)");
 }
