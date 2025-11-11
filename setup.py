@@ -58,7 +58,53 @@ setup(
                 ],
             },
             
-        )
+        ),
+        CUDAExtension(
+            name="rmsnormFused",   
+            sources=["csrc/dlops/rmsnorm/rmsnorm_binding.cu"],
+            extra_compile_args={
+                "cxx": [
+                    "-std=c++17",
+                    "-O3",
+                    "-fPIC",
+                ],
+                "nvcc": [
+                    "-O2",
+                    # keep std for host compiler compatibility; nvcc accepts it too
+                    "-std=c++17",
+                    f"-I{CUTLASS_PATH}",
+                    "--expt-relaxed-constexpr",
+                    "--expt-extended-lambda",
+                    gencode_flag,
+                    "-Xptxas=-v",
+                    "-Xcompiler", "-fPIC",
+                ],
+            },
+            
+        ),
+        CUDAExtension(
+            name="layernormFused",   
+            sources=["csrc/dlops/layernorm/layernorm_binding.cu"],
+            extra_compile_args={
+                "cxx": [
+                    "-std=c++17",
+                    "-O3",
+                    "-fPIC",
+                ],
+                "nvcc": [
+                    "-O2",
+                    # keep std for host compiler compatibility; nvcc accepts it too
+                    "-std=c++17",
+                    f"-I{CUTLASS_PATH}",
+                    "--expt-relaxed-constexpr",
+                    "--expt-extended-lambda",
+                    "-Xptxas=-v",
+                    "-Xcompiler", "-fPIC",
+                ],
+            },
+            
+        ),
+
     ],
     cmdclass={"build_ext": BuildExtension},
 )
