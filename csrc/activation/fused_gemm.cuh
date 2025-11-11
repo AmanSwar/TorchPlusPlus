@@ -21,13 +21,15 @@ template <
   typename ElemOutputDtype,
   typename ElemAccDtype,
   typename ElemComputeDtype,
-  int Count
+  int Count,
+  typename ActivationFunction
 >
-class LinearGeluFP16{
+class LinearActivationFP16{
 public:
   using ElementOutput = ElemOutputDtype;
   using ElementAccumulator  = ElemAccDtype;
   using ElementCompute = ElemComputeDtype;
+  using ActivationOps = ActivationFunction;
 
   static int const kCount = Count;
 
@@ -50,10 +52,12 @@ public:
 private:
   ElementCompute alpha_;
   ElementCompute beta_;
+  ActivationOps activationOps_; // instance of activation function
+  
 
 public:
   CUTLASS_HOST_DEVICE
-  LinearGeluFP16(Params const &params){
+  LinearActivationFP16(Params const &params){
     alpha_ = params.alpha;
     beta_ = params.beta;
   }
@@ -91,13 +95,13 @@ public:
     cutlass::NumericArrayConverter<CUTLASSFP16, ElementCompute, kCount> toHalf;
     halfIntermediate = toHalf(intermediate);
     
-    GeluHalf gelu;
+    // GeluHalf gelu;
 
     cutlass::Array<CUTLASSFP16, kCount> halfResult;
 
     CUTLASS_PRAGMA_UNROLL
     for(int i = 0 ; i < kCount ; i++){
-      halfResult[i] = gelu(halfIntermediate[i]);
+      halfResult[i] = activationOps_(halfIntermediate[i]);
     }
 
 
@@ -118,7 +122,19 @@ public:
 
 };
 
+
+// template <typename ElemOutDtype , typename ElemAccDtype , typename ElemCompDtype , int Count>
+// using LinearGeluFP16 = LinearActivationFP16<ElemOutDtype , ElemAccDtype , ElemCompDtype , Count , activation::GeluHalf>;
+
+
+// template <typename ElemOutDtype , typename ElemAccDtype , typename ElemCompDtype , int Count>
+// using LinearSiluFP16 = LinearActivationFP16<ElemOutDtype , ElemAccDtype , ElemCompDtype , Count , activation::SiluHalf>;
+
+
+
 namespace fused_linear{
+
+  
 using ElementA = CUTLASSFP16;
 using ElementB = CUTLASSFP16;
 using ElementC = CUTLASSFP16;
@@ -133,29 +149,34 @@ using LayoutC = cutlass::layout::RowMajor;
 static int const kAlignA = 8;
 static int const kAlignB = 8;
 
-using EpilogueOp = LinearGeluFP16<
-  ElementC,
-  ElementAcc,
-  ElementCompute,
-  128 / cutlass::sizeof_bits<ElementC>::value
->;
+template <typename ActivationFunction>
+struct GemmActivation{
 
-using Gemm = cutlass::gemm::device::Gemm<
-  ElementA , LayoutA,
-  ElementB , LayoutB,
-  ElementC , LayoutC,
-  ElementAcc,
-  cutlass::arch::OpClassTensorOp, // forcing it to use tensor cores (only compatible for volta++ arch)
-  cutlass::arch::Sm80,
-  cutlass::gemm::GemmShape<128 , 128 , 32>,
-  cutlass::gemm::GemmShape<64,64,32>,
-  cutlass::gemm::GemmShape<16,8,16>,
-  EpilogueOp,
-  cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
-  3,
-  kAlignA,
-  kAlignB
->;
+  using EpilogueOp = LinearActivationFP16<
+    ElementC,
+    ElementAcc,
+    ElementCompute,
+    128 / cutlass::sizeof_bits<ElementC>::value,
+    ActivationFunction
+  >;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    ElementA , LayoutA,
+    ElementB , LayoutB,
+    ElementC , LayoutC,
+    ElementAcc,
+    cutlass::arch::OpClassTensorOp, // forcing it to use tensor cores (only compatible for volta++ arch)
+    cutlass::arch::Sm80,
+    cutlass::gemm::GemmShape<128 , 128 , 32>,
+    cutlass::gemm::GemmShape<64,64,32>,
+    cutlass::gemm::GemmShape<16,8,16>,
+    EpilogueOp,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    3,
+    kAlignA,
+    kAlignB
+  >;
+};
 
 }
 }
