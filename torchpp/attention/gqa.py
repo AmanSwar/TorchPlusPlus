@@ -5,6 +5,9 @@ from flash_attn import flash_attn_func
 
 from torchpp.dlops.rope import rope_apply
 
+from typing import Optional 
+from torchpp.llmops.kvcache import KVCache
+
 class GroupedQueryAttention(nn.Module):
 
     def __init__(
@@ -63,7 +66,9 @@ class GroupedQueryAttention(nn.Module):
     def forward(
         self,
         x,
-        cos , sin
+        cos , sin,
+        kv_cache : Optional[KVCache] = None,
+        cache_pos : Optional[int] = None
     ):
         bs, seq_len, _ = x.shape
 
@@ -81,17 +86,17 @@ class GroupedQueryAttention(nn.Module):
         if self.k_norm:
             K = self.k_norm(K)
 
-        # if cache_position is not None and kv_cache is not None:
-        #     pos_cos = cos[cache_position : cache_position + seq_len]
-        #     pos_sin = sin[cache_position : cache_position + seq_len]
-        #     Q = rope_apply_cuda(Q, pos_cos, pos_sin)
-        #     K = rope_apply_cuda(K, pos_cos, pos_sin)
-        # else:
-        Q = rope_apply(Q, cos, sin)
-        K = rope_apply(K, cos, sin)
+        if cache_pos is not None and kv_cache is not None:
+            pos_cos = cos[cache_pos : cache_pos + seq_len]
+            pos_sin = sin[cache_pos : cache_pos + seq_len]
+            Q = rope_apply(Q, pos_cos, pos_sin)
+            K = rope_apply(K, pos_cos, pos_sin)
+        else:
+            Q = rope_apply(Q, cos, sin)
+            K = rope_apply(K, cos, sin)
 
-        # if kv_cache is not None:
-        #     K, V = kv_cache.update(K, V)
+        if kv_cache is not None:
+            K, V = kv_cache.update(K, V)
 
         K = K.repeat_interleave(self.num_kv_grps, dim=1)
         V = V.repeat_interleave(self.num_kv_grps, dim=1)
