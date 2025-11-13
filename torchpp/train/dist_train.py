@@ -405,15 +405,15 @@ class DistrbutedTrainer:
                     self.config.max_grad_norm,
                 )
               
-              self.optimizer.step()
+              self.optimizer.step() # type: ignore
               
               if self.lr_scheduler is not None:
                   self.lr_scheduler.step()
               
-              self.optimizer.zero_grad()
+              self.optimizer.zero_grad() # type: ignore
               self.global_step += 1
               
-              if self.global_step % self.config.log_every_n_steps == 0:
+              if self.global_step % self.config.log_every_n_steps == 0: # type: ignore
                   self._log_metrics(metrics)
               
               if self.global_step % self.config.checkpoint_every_n_steps == 0:
@@ -465,7 +465,7 @@ class DistrbutedTrainer:
   def _log_metrics(self, metrics: Dict[str, float]):
     """Log training metrics""" #given by claude
     if self.is_main_process:
-        lr = self.optimizer.param_groups[0]["lr"]
+        lr = self.optimizer.param_groups[0]["lr"] # type: ignore
         log_str = f"Step {self.global_step} | "
         log_str += f"Loss: {metrics['loss']:.4f} | "
         log_str += f"LR: {lr:.2e}"
@@ -485,7 +485,7 @@ class DistrbutedTrainer:
     
     checkpoint = {
         "model": state_dict,
-        "optimizer": self.optimizer.state_dict(),
+        "optimizer": self.optimizer.state_dict(), # type: ignore
         "global_step": self.global_step,
         "epoch": self.current_epoch,
         "config": self.config.__dict__,
@@ -523,7 +523,7 @@ class DistrbutedTrainer:
     else:
       self.model.load_state_dict(checkpoint["model"])
     
-    self.optimizer.load_state_dict(checkpoint["optimizer"])
+    self.optimizer.load_state_dict(checkpoint["optimizer"]) # type: ignore
     
     self.global_step = checkpoint["global_step"]
     self.current_epoch = checkpoint["epoch"]
