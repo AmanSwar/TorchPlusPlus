@@ -14,7 +14,8 @@ class CrossAttention(nn.Module):
       qknorm : bool = True,
       dtype : torch.dtype = torch.float16,
   ):
-    #all consts    
+    #all consts   
+    super().__init__() 
     self.embed_dim = embed_dim
     self.cross_dim = cross_dim
     self.n_heads = n_heads
