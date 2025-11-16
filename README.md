@@ -53,7 +53,7 @@ export CUTLASS_PATH=/path/to/cutlass/include
 **Installation:**
 
 ```bash
-git clone https://github.com/your-username/torchpp.git
+git clone https://github.com/AmanSwar/TorchPlusPlus.git
 cd torchpp
 pip install .
 ```
