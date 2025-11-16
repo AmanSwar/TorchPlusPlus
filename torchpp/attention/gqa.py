@@ -70,6 +70,9 @@ class GroupedQueryAttention(nn.Module):
         kv_cache : Optional[KVCache] = None,
         cache_pos : Optional[int] = None
     ):
+        
+        # print(f"x dtype in GQA: {x.dtype}")
+        # print(f"Wq dtype in GQA: {self.Wq.weight.dtype}")
         bs, seq_len, _ = x.shape
 
         Q: torch.Tensor = self.Wq(x)
@@ -110,4 +113,5 @@ class GroupedQueryAttention(nn.Module):
 
         attn_out = attn_out.reshape(bs, seq_len, self.d_out)
         return self.out_projection(attn_out)
+    
     
