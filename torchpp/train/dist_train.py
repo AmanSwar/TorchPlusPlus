@@ -50,7 +50,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-from torchpp.llmops.train.config import TrainingConfig 
+from torchpp.train.config import TrainingConfig 
 
 class ParallelStrategy(Enum):
 
