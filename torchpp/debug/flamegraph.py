@@ -73,5 +73,5 @@ def profile_model_flamegraph(
     # Export to Chrome trace format
     prof.export_chrome_trace(trace_path)
 
-    
+    print(f"Flamegraph trace written to: {trace_path} , name : {model.__class__.__name__}") 
     return trace_path
