@@ -2,6 +2,7 @@ import ropeApplyFunction
 
 import torch
 
+from torchpp.dlops.rope import qkrope_apply
 
 def rope_apply(
   x : torch.Tensor,
@@ -32,9 +33,10 @@ head_dim = 128
 device = torch.device("cuda")
 
 cos , sin = compute_rope_params(head_dim , 1e6 , seq_len)
-x = torch.rand(bs , n_heads , seq_len , head_dim , device=device , dtype=torch.float16)
- 
-out = rope_apply(x , cos , sin)
+x = torch.rand(bs , n_heads , seq_len , head_dim , device=device , dtype=torch.float16) # query tensor
+y = torch.rand(bs , n_heads , seq_len , head_dim , device=device , dtype=torch.float16) # key tensor 
+# out = rope_apply(x , cos , sin)
+out = qkrope_apply(x , y , cos , sin)
 
 print(out)
 
