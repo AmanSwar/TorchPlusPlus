@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 
+from typing import Optional 
+from torchpp.llmops.kvcache import KVCache
+
 from flash_attn import flash_attn_func
 
 
@@ -53,7 +56,12 @@ class CrossAttention(nn.Module):
 
     
     
-  def forward(self , x : torch.Tensor , y : torch.Tensor) -> torch.Tensor:
+  def forward(
+      self ,
+      x : torch.Tensor , 
+      y : torch.Tensor,
+      kv_cache : Optional[KVCache] = None,
+  ) -> torch.Tensor:
 
     batch_size , seq_line , _ = x.shape
 
@@ -65,6 +73,10 @@ class CrossAttention(nn.Module):
     Q = Q.view(batch_size , seq_line , self.n_heads , self.head_dim)
     K = K.view(batch_size , seq_line , self.n_heads , self.head_dim)
     V = V.view(batch_size , seq_line , self.n_heads , self.head_dim)
+
+    #update kv cache
+    if kv_cache is not None:
+      K , V = kv_cache.update(K , V)  
 
     attention_out : torch.Tensor | None = flash_attn_func(Q , K , V)
 
