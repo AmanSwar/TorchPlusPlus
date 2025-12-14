@@ -30,29 +30,30 @@ class CrossAttention(nn.Module):
     self.qknorm = qknorm
     self.dtype = dtype
 
+    self.hidden_dim = self.head_dim * self.n_heads
 
     self.Wq = nn.Linear(
       self.embed_dim,
-      self.embed_dim,
+      self.hidden_dim,
       bias=False,
       dtype=self.dtype
     )
 
     self.Wk = nn.Linear(
       self.cross_dim,
-      self.embed_dim,
+      self.hidden_dim,
       bias=False,
       dtype=self.dtype
     )
 
     self.Wv = nn.Linear(
       self.cross_dim,
-      self.embed_dim,
+      self.hidden_dim,
       bias=False,
       dtype=self.dtype
     )
 
-    self.out_projection = nn.Linear(self.embed_dim , self.embed_dim , dtype=self.dtype)
+    self.out_projection = nn.Linear(self.hidden_dim , self.embed_dim , dtype=self.dtype)
 
     
     
@@ -63,16 +64,17 @@ class CrossAttention(nn.Module):
       kv_cache : Optional[KVCache] = None,
   ) -> torch.Tensor:
 
-    batch_size , seq_line , _ = x.shape
+    batch_size , seq_len_q , _ = x.shape
+    _ , seq_len_kv = y.shape
 
     Q : torch.Tensor = self.Wq(x)
     K : torch.Tensor = self.Wk(y)
     V : torch.Tensor = self.Wv(y)
 
 
-    Q = Q.view(batch_size , seq_line , self.n_heads , self.head_dim)
-    K = K.view(batch_size , seq_line , self.n_heads , self.head_dim)
-    V = V.view(batch_size , seq_line , self.n_heads , self.head_dim)
+    Q = Q.view(batch_size , seq_len_q , self.n_heads , self.head_dim)
+    K = K.view(batch_size , -1 , self.n_heads , self.head_dim)
+    V = V.view(batch_size , -1 , self.n_heads , self.head_dim)
 
     #update kv cache
     if kv_cache is not None:
@@ -80,6 +82,6 @@ class CrossAttention(nn.Module):
 
     attention_out : torch.Tensor | None = flash_attn_func(Q , K , V)
 
-    attention_out = attention_out.reshape(batch_size , seq_line , self.embed_dim)
+    attention_out = attention_out.reshape(batch_size , seq_len_q , self.embed_dim)
 
     return self.out_projection(attention_out)
