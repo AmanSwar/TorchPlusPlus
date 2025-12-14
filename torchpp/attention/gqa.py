@@ -18,6 +18,8 @@ class GroupedQueryAttention(nn.Module):
         head_dim: int | None = None,
         qk_norm: bool = True,
         dtype : torch.dtype =torch.float16,
+
+        DEBUG : bool = False,
     ):
         super().__init__()
 
@@ -63,16 +65,18 @@ class GroupedQueryAttention(nn.Module):
         else:
             self.q_norm = self.k_norm = None
 
+        self.DEBUG = DEBUG
+
     def forward(
         self,
         x,
         cos , sin,
         kv_cache : Optional[KVCache] = None,
-        cache_pos : Optional[int] = None
+        cache_pos : Optional[int] = None,
     ):
+        if(self.DEBUG):
+            print(f"\nGQA Input x shape: {x.shape}") 
         
-        # print(f"x dtype in GQA: {x.dtype}")
-        # print(f"Wq dtype in GQA: {self.Wq.weight.dtype}")
         bs, seq_len, _ = x.shape
 
         Q: torch.Tensor = self.Wq(x)
@@ -88,6 +92,18 @@ class GroupedQueryAttention(nn.Module):
 
         if self.k_norm:
             K = self.k_norm(K)
+
+        Q = Q.contiguous()
+        K = K.contiguous()
+
+        if(self.DEBUG):
+            print("\nGQA DEBUG INFO:")
+
+            print(f"Q dtype: {Q.dtype}, K dtype: {K.dtype}, V dtype: {V.dtype}")
+            print(f"cos dtype: {cos.dtype}, sin dtype: {sin.dtype}")
+            print(f"Q Shape: {Q.shape}, K Shape: {K.shape}, V Shape: {V.shape}")
+            print(f"cos Shape: {cos.shape}, sin Shape: {sin.shape}")
+            print(f"Q contiguous: {Q.is_contiguous()}, K contiguous: {K.is_contiguous()}")
 
         if cache_pos is not None and kv_cache is not None:
             pos_cos = cos[cache_pos : cache_pos + seq_len]
