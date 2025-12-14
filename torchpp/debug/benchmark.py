@@ -34,9 +34,11 @@ def benchmark_model(
   final_time = time.monotonic() - start
 
 
-  print("Finish Benchmarking !")
+  print("\nFinish Benchmarking !")
   print("\nResults:\n")
+  print(f"Input Size : {[inp.shape for inp in inputs]}")
   print(f"Time Taken : {(final_time / steps):.3f}")
   print(f"Throughput  : {(1 / (final_time / steps)):.3f} samples/sec")
+  print("\n----------------\n")
 
 
