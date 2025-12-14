@@ -58,6 +58,15 @@ def get_extensions():
             },
         ),
         CUDAExtension(
+            name="qkropeApplyFunction",
+            sources=["csrc/dlops/qkrope/qkrope_binding.cu"],
+            include_dirs=INCLUDE_DIRS,
+            extra_compile_args={
+                "cxx": BASE_CXX_ARGS,
+                "nvcc": BASE_NVCC_ARGS,
+            },
+        ),
+        CUDAExtension(
             name="rmsnormFused",
             sources=["csrc/dlops/rmsnorm/rmsnorm_binding.cu"],
             include_dirs=INCLUDE_DIRS,
