@@ -99,4 +99,47 @@ class Dense(nn.Module):
     ).to(x.dtype)
     
     return output
-   
+
+
+
+
+# fixed format linear
+
+class LinearNBFp16(nn.Module):
+  """
+  Linear Layer with no bias and fp16 dtype
+  """
+  def __init__(
+      self,
+      in_features,
+      out_features
+  ):
+    
+    self.linear = nn.Linear(
+      in_features=in_features,
+      out_features=out_features,
+      bias=False,
+      dtype=torch.float16
+    )
+
+  def forward(self , x):
+    return self.linear(x)
+  
+
+class LinearNBBf16(nn.Module):
+
+  def __init__(
+      self,
+      in_features,
+      out_features
+  ):
+    
+    self.linear = nn.Linear(
+      in_features=in_features,
+      out_features=out_features,
+      bias=False,
+      dtype=torch.bfloat16
+    )
+
+  def forward(self , x):
+    return self.linear(x)
