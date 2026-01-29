@@ -6,7 +6,7 @@ from flash_attn import flash_attn_func
 from torchpp.dlops.rope import rope_apply
 
 
-class MQA_FA(nn.Module):
+class MultiQueryAttention(nn.Module):
 
   def __init__(
       self,
