@@ -60,7 +60,17 @@ class SpatialTransformer(nn.Module):
     self.out_dimension_q = self.head_dim * self.num_q_heads
     self.out_dimension_k = self.head_dim * self.num_k_heads
     self.out_dimension_v = self.head_dim * self.num_v_heads
-    
+
+    if dtype == torch.float16:
+      self.Wo = LinearNBFp16(    
+        in_features=self.out_dimension_q,
+        out_features=self.in_dim
+      )
+    if dtype == torch.bfloat16:
+      self.Wo = LinearNBBf16(    
+        in_features=self.out_dimension_q,
+        out_features=self.in_dim
+      )
 
     self.qkv_projection = QKV(
       in_dimension= self.in_dim,
