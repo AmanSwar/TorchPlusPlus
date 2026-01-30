@@ -23,6 +23,7 @@ from typing import Literal
 from torchpp.dlops.linear import LinearNBFp16 , LinearNBBf16
 from torchpp.attention import QKV
 from torchpp.utils import exists
+from torchpp.visionops.graph import GraphConvolution
 
 
 #to do : replace vanilla linear with fused linear + relu
@@ -109,16 +110,12 @@ class SpatialTransformer(nn.Module):
     self.out_dimension_k = self.head_dim * self.num_k_heads
     self.out_dimension_v = self.head_dim * self.num_v_heads
 
-    if dtype == torch.float16:
-      self.Wo = LinearNBFp16(    
-        in_features=self.out_dimension_q,
-        out_features=self.in_dim
-      )
-    if dtype == torch.bfloat16:
-      self.Wo = LinearNBBf16(    
-        in_features=self.out_dimension_q,
-        out_features=self.in_dim
-      )
+    self.wo = nn.Linear(
+      in_features=self.out_dimension_q,
+      out_features=self.in_dim,
+      bias=False,
+      dtype=dtype
+    )
 
     self.qkv_projection = QKV(
       in_dimension= self.in_dim,
