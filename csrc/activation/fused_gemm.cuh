@@ -26,15 +26,15 @@ template <
 >
 class LinearActivationFP16{
 public:
-  using ElementOutput = ElemOutputDtype;
-  using ElementAccumulator  = ElemAccDtype;
-  using ElementCompute = ElemComputeDtype;
-  using ActivationOps = ActivationFunction;
+  using ElementOutput = ElemOutputDtype; // dtype of output element
+  using ElementAccumulator  = ElemAccDtype; // acc dtype
+  using ElementCompute = ElemComputeDtype; // dtype of epilogue moaths
+  using ActivationOps = ActivationFunction; // function holder
 
   static int const kCount = Count;
 
-  using FragmentOutput = cutlass::Array<ElementOutput , kCount>;
-  using FragmentAcc = cutlass::Array<ElementAccumulator , kCount>;
+  using FragmentOutput = cutlass::Array<ElementOutput , kCount>; // fragments (basically storing everything in registers)
+  using FragmentAcc = cutlass::Array<ElementAccumulator , kCount>; 
   using ComputeFragment = cutlass::Array<ElementCompute , kCount>;
 
   struct Params {
@@ -121,15 +121,6 @@ public:
   }
 
 };
-
-
-// template <typename ElemOutDtype , typename ElemAccDtype , typename ElemCompDtype , int Count>
-// using LinearGeluFP16 = LinearActivationFP16<ElemOutDtype , ElemAccDtype , ElemCompDtype , Count , activation::GeluHalf>;
-
-
-// template <typename ElemOutDtype , typename ElemAccDtype , typename ElemCompDtype , int Count>
-// using LinearSiluFP16 = LinearActivationFP16<ElemOutDtype , ElemAccDtype , ElemCompDtype , Count , activation::SiluHalf>;
-
 
 
 namespace fused_linear{
