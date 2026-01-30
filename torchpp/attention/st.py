@@ -45,7 +45,7 @@ class SpatialTransformer(nn.Module):
   ):
     super().__init__()
 
-    assert num_q_heads % num_k_heads == 0 & num_q_heads % num_v_heads == 0, \
+    assert num_q_heads % num_k_heads == 0 and num_q_heads % num_v_heads == 0, \
       "Number of Q heads must be divisble by K and V heads" 
     
     assert dtype == torch.float16 or dtype == torch.bfloat16 , \
@@ -62,47 +62,6 @@ class SpatialTransformer(nn.Module):
     self.out_dimension_v = self.head_dim * self.num_v_heads
     
 
-    if dtype == torch.float16:
-      self.Wq = LinearNBFp16(
-        in_features= self.in_dim,
-        out_features = self.out_dimension_q
-      )
-
-      self.Wk = LinearNBFp16(
-        in_features= self.in_dim,
-        out_features=self.out_dimension_k
-      )  
-
-      self.Wv = LinearNBBf16(
-        in_features=self.in_dim,
-        out_features=self.out_dimension_v
-      )
-
-      self.Wo = LinearNBFp16(
-        in_features= self.out_dimension_q,
-        out_features= self.in_dim
-      )
-
-    if dtype == torch.bfloat16: 
-      self.Wq = LinearNBBf16(
-        in_features= self.in_dim,
-        out_features = self.out_dimension_q
-      )
-
-      self.Wk = LinearNBBf16(
-        in_features= self.in_dim,
-        out_features=self.out_dimension_k
-      )  
-
-      self.Wv = LinearNBBf16(
-        in_features=self.in_dim,
-        out_features=self.out_dimension_v 
-      )
-      self.Wo = LinearNBBf16(
-        in_features= self.out_dimension_q,
-        out_features= self.in_dim
-      )
-
     self.qkv_projection = QKV(
       in_dimension= self.in_dim,
       num_q_heads = self.num_q_heads,
@@ -117,6 +76,7 @@ class SpatialTransformer(nn.Module):
       self,
       video_tensor : torch.Tensor, 
       cond : torch.Tensor | None = None,
+      casual : bool = False
   ):
     #currently not supporting kv cache
     # fixed cos and sin value (not on-fly)
@@ -141,7 +101,7 @@ class SpatialTransformer(nn.Module):
     K = K.transpose(1 , 2)
     V = V.transpose(1 , 2)
 
-    attn_output : torch.Tensor | None = flash_attn_func(Q , K , V , causal = True)
+    attn_output : torch.Tensor | None = flash_attn_func(Q , K , V , causal = casual)
     attn_output = rearrange(attn_output , 'b n h d -> b n (h d)')
 
     return self.Wo(attn_output).contiguous().view(b , *t_ps , h , w , c) if not self.transpose else self.Wo(attn_output).contiguous().view(b , *t_ps , h , w , c).transpose(-1 , -3)
@@ -150,7 +110,7 @@ class SpatialTransformer(nn.Module):
   
 
 class TemporalTransformer(nn.Module):
-  pass
+  
 
 
 class ST_Transformer(nn.Module):
