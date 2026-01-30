@@ -1,6 +1,8 @@
 """
 Spatio-Temporal Transformer implementation
 
+based on the paper https://arxiv.org/abs/2001.02908
+
 input -> images or videos
 image -> (b , c , h , w)
 videos -> (b , c , t , h , w) | (b , t , h , w ,c)
@@ -21,6 +23,52 @@ from typing import Literal
 from torchpp.dlops.linear import LinearNBFp16 , LinearNBBf16
 from torchpp.attention import QKV
 from torchpp.utils import exists
+
+
+#to do : replace vanilla linear with fused linear + relu
+class SpatialMLP(nn.Module):
+
+  def __init__(
+      self,
+      in_dimension : int,
+      hidden_dimension : int,
+      dtype : torch.dtype = torch.float16
+  ):
+    super().__init__()
+
+    self.layer_1 = nn.Linear(
+      in_features=in_dimension,
+      out_features=hidden_dimension,
+      bias=False,
+      dtype=dtype
+    )
+
+    self.layer_2 = nn.Linear(
+      in_features=hidden_dimension,
+      out_features=hidden_dimension,
+      bias=False,
+      dtype=dtype
+    )
+
+    self.layer_3 = nn.Linear(
+      in_features=hidden_dimension,
+      out_features=hidden_dimension,
+      bias=False,
+      dtype=dtype
+    )
+    
+    self.activation = nn.ReLU()
+  
+  def forward(self , x : torch.Tensor):
+    x = self.layer_1(x)
+    x = self.activation(x)
+    x = self.layer_2(x)
+    x = self.activation(x)
+    x = self.layer_3(x)
+
+    return x
+
+
 
 class SpatialTransformer(nn.Module):
   """
