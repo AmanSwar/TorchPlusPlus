@@ -24,6 +24,8 @@ from torchpp.utils import default
 
 
 
+
+
 # to do : make fused kernels for qkv projection for fp16 and bf16\
 # fused kernels -> qkv projection + qk normalization
 class QKV(nn.Module):
@@ -74,7 +76,7 @@ class QKV(nn.Module):
         out_features=self.num_heads * self.k_head_dim
       )  
 
-      self.Wv = LinearNBBf16(
+      self.Wv = LinearNBFp16(
         in_features=self.in_dim,
         out_features=self.num_heads * self.v_head_dim
       )
@@ -101,11 +103,14 @@ class QKV(nn.Module):
     
   def forward(
       self,
-      query_input : Tensor,
-      key_input : Tensor,
-      value_input : Tensor
+      query_input : torch.Tensor,
+      key_input : Tensor = None,
+      value_input : Tensor = None
   ):
-    
+
+    key_input = default(key_input , query_input)
+    value_input = default(value_input , query_input)
+
     Q = self.Wq(query_input)
     K = self.Wk(key_input)
     V = self.Wv(value_input)
