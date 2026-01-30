@@ -10,13 +10,13 @@ Spatial
 
 """
 
-
 import torch
 import torch.nn as nn
 
 from einops import rearrange , repeat , pack , unpack
-
 from flash_attn import flash_attn_func
+
+from typing import Literal
 
 from torchpp.dlops.linear import LinearNBFp16 , LinearNBBf16
 from torchpp.attention import QKV
@@ -38,7 +38,7 @@ class SpatialTransformer(nn.Module):
       num_q_heads : int,
       num_k_heads : int,
       num_v_heads : int,
-      qk_norm : bool,
+      qk_norm : Literal["layernorm" , "rmsnorm" , None] = None,
       transpose : bool = False,
       dtype : torch.dtype = torch.float16
   
@@ -81,6 +81,7 @@ class SpatialTransformer(nn.Module):
       qk_normalize = qk_norm,
       dtype = dtype
     )
+
     self.transpose = transpose
   def forward(
       self,
@@ -120,6 +121,7 @@ class SpatialTransformer(nn.Module):
   
 
 class TemporalTransformer(nn.Module):
+  pass
   
 
 
