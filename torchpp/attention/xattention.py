@@ -18,6 +18,8 @@ import torch.nn as nn
 
 from einops import rearrange , pack, unpack
 
+from typing import Literal
+
 from torchpp.types import Int , Bool , Tensor
 from torchpp.dlops.linear import LinearNBFp16 , LinearNBBf16
 from torchpp.utils import default
@@ -41,7 +43,7 @@ class QKV(nn.Module):
       num_q_heads : Int = None,
       num_k_heads : Int = None,
       num_v_heads : Int = None,
-      qk_normalize : Bool = None,
+      qk_normalize : Literal["layernorm" , "rmsnorm" , None]  = None,
       dtype : torch.dtype = torch.float16
 
   ):
@@ -98,8 +100,13 @@ class QKV(nn.Module):
       )
 
     if(self.qk_normalize):
-      self.q_norm = nn.RMSNorm(self.q_head_dim, eps=1e-6 ,dtype=dtype)
-      self.k_norm = nn.RMSNorm(self.k_head_dim, eps=1e-6 ,dtype=dtype)
+      if(self.qk_normalize == "layernorm"):
+        self.q_norm = nn.LayerNorm(self.q_head_dim , eps=1e-6 ,dtype=dtype)
+        self.k_norm = nn.LayerNorm(self.k_head_dim , eps=1e-6 ,dtype=dtype)
+      
+      if(self.qk_normalize == "rmsnorm"):
+        self.q_norm = nn.RMSNorm(self.q_head_dim, eps=1e-6 ,dtype=dtype)
+        self.k_norm = nn.RMSNorm(self.k_head_dim, eps=1e-6 ,dtype=dtype)
     
   def forward(
       self,
