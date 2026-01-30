@@ -56,6 +56,17 @@ struct SiluHalf {
 };
 
 
+struct ReluHalf{
+  
+  CUTLASS_HOST_DEVICE
+  cutlass::half_t operator()(cutlass::half_t const &input) const {
+    float inputFloat = float(input);
+    float result = fmaxf(0.0f , inputFloat);
+    return cutlass::half_t(result);
+  }
+};
+
+
 } // namespace activation
 
 } // namespace torchpp
