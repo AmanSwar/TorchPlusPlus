@@ -23,7 +23,8 @@ from typing import Literal
 from torchpp.dlops.linear import LinearNBFp16 , LinearNBBf16
 from torchpp.attention import QKV
 from torchpp.utils import exists
-from torchpp.visionops.graph import GraphConvolution
+
+from torchpp.attention import CrossAttention
 
 
 #to do : replace vanilla linear with fused linear + relu
@@ -70,105 +71,151 @@ class SpatialMLP(nn.Module):
     return x
 
 
+class TransformerBlock(nn.Module):
 
-class SpatialTransformer(nn.Module):
-  """
-  Spatial Tranformer keeps attention amoung the pixed for images and videos
-  
-
-  Args:
-      nn (_type_): _description_
-  """
-  
   def __init__(
       self,
-      in_dimension : int,
-      head_dimension : int,
-      num_q_heads : int,
-      num_k_heads : int,
-      num_v_heads : int,
-      qk_norm : Literal["layernorm" , "rmsnorm" , None] = None,
-      transpose : bool = False,
+      hidden_dim : int,
+      num_heads : int,
+      intermediate_dim : int,
+      hidden_dropout : float = 0.1,
+      attention_dropout : float = 0.1,
       dtype : torch.dtype = torch.float16
-  
   ):
+    
     super().__init__()
 
-    assert num_q_heads % num_k_heads == 0 and num_q_heads % num_v_heads == 0, \
-      "Number of Q heads must be divisble by K and V heads" 
-    
-    assert dtype == torch.float16 or dtype == torch.bfloat16 , \
-    "Dtype must be float16 or bfloat16"
-    
-    self.in_dim = in_dimension
-    self.head_dim = head_dimension
-    self.num_q_heads = num_q_heads
-    self.num_k_heads = num_k_heads
-    self.num_v_heads = num_v_heads
+    #attention part
+    self.attention = CrossAttention(
+        embed_dim=hidden_dim,
+        cross_dim=hidden_dim,
+        n_heads=num_heads,
+        qknorm=True,
+        dtype=dtype,
+    )
+    self.attn_dropout = nn.Dropout(attention_dropout)
+    self.attn_layernorm = nn.LayerNorm(hidden_dim , eps=1e-6 ,dtype=dtype)
 
-    self.out_dimension_q = self.head_dim * self.num_q_heads
-    self.out_dimension_k = self.head_dim * self.num_k_heads
-    self.out_dimension_v = self.head_dim * self.num_v_heads
+    self.intermediate_ffn = nn.Linear(hidden_dim , intermediate_dim , dtype=dtype)
+    self.output_ffn = nn.Linear(intermediate_dim , hidden_dim , dtype=dtype)
+    self.ffn_dropout = nn.Dropout(hidden_dropout)
+    self.ffn_layernorm = nn.LayerNorm(hidden_dim , eps=1e-6 ,dtype=dtype)
+    
 
-    self.wo = nn.Linear(
-      in_features=self.out_dimension_q,
-      out_features=self.in_dim,
-      bias=False,
-      dtype=dtype
+  def forward(self , x : torch.Tensor):
+    
+    #attention block
+    residual = x
+    x = self.attention(x , x)
+    x = self.attn_dropout(x)
+    x = self.attn_layernorm(x + residual)
+
+    #ffn block
+    residual = x
+    x = nn.functional.relu(self.intermediate_ffn(x))
+    x = self.output_ffn(x)
+    x = self.ffn_dropout(x)
+    x = self.ffn_layernorm(x + residual)
+
+    return x
+
+class SpatialTransformer(nn.Module):
+
+  def __init__(
+      self,
+      kernel_size : int,
+      in_channel : int,
+      out_channel : int,
+      num_routes : int,
+      hidden_dim : int,
+      num_heads : int,
+      intermediate_dim : int,
+      dropout : float = 0.1,
+  ):
+    
+    super().__init__()
+
+
+    self.out_channel = out_channel
+    self.num_routes = num_routes
+    self.kernel_size = kernel_size
+
+    self.input_projection = None
+    if(in_channel != out_channel):
+      self.input_projection = nn.Conv2d(
+        in_channels=in_channel,
+        out_channels=out_channel,
+        kernel_size=1
+      )
+
+    self.graph_weight = nn.Parameter(torch.empty(kernel_size * in_channel , out_channel))
+    self.graph_bias = nn.Parameter(torch.zeros(out_channel))
+
+    self.transformer_block = TransformerBlock(
+      hidden_dim=out_channel,
+      num_heads=num_heads,
+      intermediate_dim=intermediate_dim,
+      hidden_dropout=dropout,
+      attention_dropout=dropout,
+      dtype=torch.float16
     )
 
-    self.qkv_projection = QKV(
-      in_dimension= self.in_dim,
-      num_q_heads = self.num_q_heads,
-      num_k_heads = self.num_k_heads,
-      num_v_heads = self.num_v_heads,
-      head_dim = self.head_dim,
-      qk_normalize = qk_norm,
-      dtype = dtype
-    )
+    nn.init.xavier_uniform_(self.graph_weight)
 
-    self.transpose = transpose
+
+  def _gconv(
+      self,
+      x : torch.Tensor, # [bs , num_routes , in_channel]
+      graph_kernel : torch.Tensor # [num_routes , kernel_size * num_routes]
+  ):
+    
+    bs , n , c_in = x.shape
+
+    #x -> [bs * c_in , num_routes]
+    x_temp = x.permute(0 , 2 , 1).reshape(-1 , n)
+
+    # x_mul = x_temp @ kernel -> [bs * c_in , kernel_size * num_routes]
+    x_mul = torch.matmul(x_temp , graph_kernel)
+
+    # reshape to [bs , c_in , ks ,n_routes]
+    x_mul = x_mul.view(bs , c_in , self.kernel_size , n)
+
+    # x_kernel -> [bs , n_routes , c_in , ks] -> [bs * n_routes , c_in * ks]
+    x_ker = x_mul.permute(0 , 3 , 1 , 2).reshape(-1 , c_in * self.kernel_size)
+
+    x_gconv = torch.matmul(x_ker , self.graph_weight) + self.graph_bias
+    x_gconv = x_gconv.view(bs , n , -1)
+
+    return x_gconv
+  
+
   def forward(
       self,
-      video_tensor : torch.Tensor, 
-      cond : torch.Tensor | None = None,
-      casual : bool = False
+      x : torch.Tensor ,
+      graph_kernel : torch.Tensor
   ):
-    #currently not supporting kv cache
-    # fixed cos and sin value (not on-fly)
+    """
+    Args:
+        x (torch.Tensor): shape -> [bs , time_step , n_route , in_channel]
+        graph_kernel (torch.Tensor): shape -> [bs , time_step , n_route , out_channel]
+    """
 
-    pattern = 'b c ... h w' if self.transpose else 'b ... h w c'
-    inp = rearrange(video_tensor , f'{pattern} -> b ... h w c')
+    B , T , n , C = x.shape
 
-    b , *t , h , w , c = video_tensor.shape
+    if self.input_projection is not None:
+      x_input = self.input_projection(x.permute(0 , 3 , 1 , 2)).permute(0 , 2 , 3 , 1) # [bs , time_step , n_route , out_channel]
 
-    inp, t_ps = pack([inp], '* h w c')        
-    inp, s_ps = pack([inp], 'b * c')
+    else:
+      x_input = x
 
-    cond = repeat(cond, 'b hw c -> (b t) hw c', t=t if exists(t) else 1) if exists(cond) else None 
-    
-    Q , K , V = self.qkv_projection(
-      query_input = inp,
-      key_input = cond if exists(cond) else inp,
-    )
+    x_flat = x.reshape(-1 , n , C)
 
+    x_gconv = self._gconv(x_flat , graph_kernel)
+    x_gconv = x_gconv.view(B , T , n , self.out_channel)
 
-    Q = Q.transpose(1 , 2)  # b h n d -> b n h d
-    K = K.transpose(1 , 2)
-    V = V.transpose(1 , 2)
+    x_trans = x.reshape(-1 , n , C)
+    x_trans = self.transformer_block(x_trans).view(B , T , n , self.out_channel)
 
-    attn_output : torch.Tensor | None = flash_attn_func(Q , K , V , causal = casual)
-    attn_output = rearrange(attn_output , 'b n h d -> b n (h d)')
+    output = nn.functional.relu(x_trans + x_input + 0.1 * x_gconv)
 
-    return self.Wo(attn_output).contiguous().view(b , *t_ps , h , w , c) if not self.transpose else self.Wo(attn_output).contiguous().view(b , *t_ps , h , w , c).transpose(-1 , -3)
-
-    
-  
-
-class TemporalTransformer(nn.Module):
-  pass
-  
-
-
-class ST_Transformer(nn.Module):
-  pass
+    return output
