@@ -219,3 +219,67 @@ class SpatialTransformer(nn.Module):
     output = nn.functional.relu(x_trans + x_input + 0.1 * x_gconv)
 
     return output
+
+
+class TemporalTransformer(nn.Module):
+
+  def __init__(
+      self,
+      in_channel : int,
+      out_channel : int,
+      num_routes : int,
+      hidden_dim : int,
+      num_heads : int,
+      intermediate_dim : int,
+      hidden_dropout : float = 0.1,
+      attention_dropout : float = 0.1,
+      dtype : torch.dtype = torch.float16
+  ):
+    
+    super().__init__()
+
+    self.out_channel = out_channel
+    self.num_routes = num_routes
+
+    self.input_projection = None
+    if(in_channel != out_channel):
+      self.input_projection = nn.Conv2d(
+        in_channels=in_channel,
+        out_channels=out_channel,
+        kernel_size=1
+      )
+
+    self.transformer_block = TransformerBlock(
+      hidden_dim=out_channel,
+      num_heads=num_heads,
+      intermediate_dim=intermediate_dim,
+      hidden_dropout=hidden_dropout,
+      attention_dropout=attention_dropout,
+      dtype=dtype
+    )
+  
+  def forward(
+      self,
+      x : torch.Tensor
+  ):
+    """
+    Args:
+        x (torch.Tensor): shape -> [bs , time_step , n_route , hidden_dim]
+    """
+
+    B , T , N , C = x.shape
+
+    if self.input_projection is not None:
+      x_input = self.input_projection(x.permute(0 , 3 , 1 , 2)).permute(0 , 2 , 3 , 1) # [bs , time_step , n_route , out_channel]
+
+    elif C < self.out_channel:
+      x_input = nn.functional.pad(x, (0, self.out_channel - C)) 
+    
+    else:
+      x_input = x
+
+
+    x_trans = x.permute(0 , 2 , 1 , 3).reshape(-1 , T , C) # [bs * n_route , time_step , hidden_dim]
+    x_trans = self.transformer_block(x_trans).view(B , N , T , self.out_channel).permute(0 , 2 , 1 , 3)
+    output = nn.functional.relu(x_trans + x_input)
+    return output
