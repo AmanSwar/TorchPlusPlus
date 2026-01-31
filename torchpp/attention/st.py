@@ -25,6 +25,8 @@ from torchpp.attention import QKV
 from torchpp.utils import exists
 
 from torchpp.attention import CrossAttention
+from torchpp.dlops import PositionalEmbedding
+from torchpp.dlops.normalization import LayerNorm4D
 
 
 #to do : replace vanilla linear with fused linear + relu
@@ -283,3 +285,111 @@ class TemporalTransformer(nn.Module):
     x_trans = self.transformer_block(x_trans).view(B , N , T , self.out_channel).permute(0 , 2 , 1 , 3)
     output = nn.functional.relu(x_trans + x_input)
     return output
+  
+
+
+
+class SpatioTemporalTransformerBlock(nn.Module):
+
+  def __init__(
+      self,
+      kernel_size : int,
+      in_channel : int,
+      out_channel : int,
+      num_routes : int,
+      n_hist : int, #historical time steps
+      spatial_hidden_dim : int,
+      spatial_num_heads : int,
+      spatial_intermediate_dim : int,
+      temporal_hidden_dim : int,
+      temporal_num_heads : int,
+      temporal_intermediate_dim : int,
+      dropout : float = 0.1,
+  ):
+    
+    super().__init__()
+
+    self.num_routes = num_routes
+    self.n_hist = n_hist
+
+    self.spatial_pos_embed = PositionalEmbedding(
+      seq_len=num_routes,
+      embed_dim=in_channel,
+      dropout=dropout
+    )
+
+    self.spatial_temporal_pos_embed = PositionalEmbedding(
+      seq_len=n_hist,
+      embed_dim=in_channel + num_routes,
+      dropout=dropout
+    )
+
+    self.temp_pos_embed = PositionalEmbedding(
+      seq_len=n_hist,
+      embed_dim=out_channel,
+      dropout=dropout
+    )
+
+    self.spatial_transformer = SpatialTransformer(
+      kernel_size=kernel_size,
+      in_channel=in_channel,
+      out_channel=out_channel,
+      num_routes=num_routes,
+      hidden_dim=spatial_hidden_dim,
+      num_heads=spatial_num_heads,
+      intermediate_dim=spatial_intermediate_dim,
+      dropout=dropout
+    )
+
+    self.temporal_transformer = TemporalTransformer(
+      in_channel=out_channel,
+      out_channel=out_channel,
+      num_routes=num_routes,
+      hidden_dim=temporal_hidden_dim,
+      num_heads=temporal_num_heads,
+      intermediate_dim=temporal_intermediate_dim,
+      hidden_dropout=dropout,
+      attention_dropout=dropout,
+      dtype=torch.float16
+    )
+
+    self.layer_norm = LayerNorm4D(num_features=out_channel)
+  
+
+  def forward(
+      self,
+      x : torch.Tensor ,
+      graph_kernel : torch.Tensor
+  ):
+    """
+    Args:
+        x (torch.Tensor): shape -> [bs , time_step , n_route , in_channel]
+        graph_kernel (torch.Tensor): shape -> [bs , time_step , n_route , out_channel]
+    """
+    B , T , N , C = x.shape
+
+
+    #spatial pos embed
+    x_flat = x.reshape(-1 , N , C)
+    x = self.spatial_pos_embed(x_flat).view(B , T , N , -1)
+
+    #temp pos embed
+    x = x.permute(0 , 2 , 1 , 3).reshape(-1 , T , x.size(-1)) # [bs * n_route , time_step , in_channel]
+
+    x = self.spatial_temporal_pos_embed(x)
+    x = x.view(B , N , T , -1).permute(0 , 2 , 1 , 3) # [bs , time_step , n_route , in_channel + n_route]
+
+    #spatial trasnformer
+    x_spatial = self.spatial_transformer(x , graph_kernel)
+    
+    
+    #temp pos embed
+    x_spatial = x_spatial.permute(0 , 2 , 1 , 3).reshape(-1 , T , x_spatial.size(-1)) # [bs * n_route , time_step , out_channel]
+    x_spatial = self.temp_pos_embed(x_spatial)
+    x_spatial = x_spatial.view(B , N , T , -1).permute(0 , 2 , 1 , 3) # [bs , time_step ,
+
+    x_o = self.temporal_transformer(x_spatial)
+
+    x_ln = self.layer_norm(x_o)
+
+    return x_ln
