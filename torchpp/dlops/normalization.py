@@ -49,3 +49,31 @@ class RmsNormFused(nn.Module):
   def forward(self,  x : torch.Tensor):
     return rmsnormFused.rmsnormFused(x , self.weight, self.eps)
 
+
+
+
+# ========================== Unfused Ops ========================== #
+
+
+class LayerNorm4D(nn.Module):
+
+  def __init__(
+      self,
+      num_features : int,
+  ):
+    
+    super().__init__()
+
+    self.gamma = nn.Parameter(torch.ones(1 , 1 , 1 , num_features))
+    self.beta = nn.Parameter(torch.zeros(1 , 1 , 1 , num_features))
+
+  def forward(self , x : torch.Tensor):
+
+    mean = x.mean(dim=[2,3] , keepdim=True)
+    var = x.var(dim=[2,3] , keepdim=True , unbiased=False)
+
+    x_norm = (x - mean) / torch.sqrt(var + 1e-6)
+
+    return x_norm * self.gamma + self.beta
+  
+
